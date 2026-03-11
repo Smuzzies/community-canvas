@@ -21,13 +21,18 @@ export function usePaintPixels() {
   const paintPixels = async (pixels: QueuedPixel[]) => {
     if (pixels.length === 0) return
 
-    // One clause per pixel (multi-clause tx on VeChain)
-    const clauses = pixels.map(p => ({
+    // Single clause using paintBatch — all pixels in one contract call.
+    // Saves the per-clause gas overhead (16,000 gas) for every pixel beyond the first.
+    const xs     = pixels.map(p => p.x)
+    const ys     = pixels.map(p => p.y)
+    const colors = pixels.map(p => hexToUint24(p.color))
+
+    const clauses = [{
       to: CONTRACT_ADDRESS,
       value: "0x0",
-      data: iface.encodeFunctionData("paint", [p.x, p.y, hexToUint24(p.color)]) as `0x${string}`,
-      comment: `Paint pixel (${p.x}, ${p.y}) ${p.color}`,
-    }))
+      data: iface.encodeFunctionData("paintBatch", [xs, ys, colors]) as `0x${string}`,
+      comment: `Paint ${pixels.length} pixel${pixels.length !== 1 ? "s" : ""}`,
+    }]
 
     await sendTransaction(clauses)
   }

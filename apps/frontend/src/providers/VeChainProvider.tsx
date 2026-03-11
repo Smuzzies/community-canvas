@@ -24,7 +24,7 @@ export function VeChainProvider({ children }: Props) {
   return (
     <VeChainKitProvider
       dappKit={{
-        allowedWallets: ["veworld", "wallet-connect"],
+        allowedWallets: ["veworld", "wallet-connect", "sync2"],
         walletConnectOptions: process.env.NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID
           ? {
               projectId: process.env.NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID,
