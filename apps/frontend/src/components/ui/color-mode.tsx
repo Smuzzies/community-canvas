@@ -51,8 +51,7 @@ export const ColorModeButton = React.forwardRef<HTMLButtonElement, ColorModeButt
           aria-label="Toggle color mode"
           size="sm"
           ref={ref}
-          {...props}
-          css={{ _icon: { width: "4", height: "4" } }}>
+          {...props}>
           <ColorModeIcon />
         </Button>
       </ClientOnly>
