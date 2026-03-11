@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useRef, useState } from "react"
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react"
 import { Box, Text } from "@chakra-ui/react"
 import { useVechainDomain } from "@vechain/vechain-kit"
 import { CANVAS_SIZE, shortAddress } from "@/lib/contract"
@@ -53,6 +53,10 @@ function PixelTooltip({ x, y, pixel, screenX, screenY }: {
   )
 }
 
+export interface PixelCanvasHandle {
+  downloadPNG: () => void
+}
+
 interface Props {
   pixels: Pixel[]
   queue: QueuedPixel[]
@@ -68,7 +72,7 @@ interface TooltipState {
   screenY: number
 }
 
-export function PixelCanvas({ pixels, queue, onPixelClick }: Props) {
+export const PixelCanvas = forwardRef<PixelCanvasHandle, Props>(function PixelCanvas({ pixels, queue, onPixelClick }, ref) {
   const baseCanvasRef    = useRef<HTMLCanvasElement>(null)
   const overlayCanvasRef = useRef<HTMLCanvasElement>(null)
   const magCanvasRef     = useRef<HTMLCanvasElement>(null)
@@ -87,6 +91,48 @@ export function PixelCanvas({ pixels, queue, onPixelClick }: Props) {
   const [tooltip, setTooltip]       = useState<TooltipState>({
     visible: false, x: 0, y: 0, pixel: null, screenX: 0, screenY: 0,
   })
+
+  // ─── Export ─────────────────────────────────────────────────────────────────
+
+  useImperativeHandle(ref, () => ({
+    downloadPNG() {
+      // Render a clean gridless offscreen canvas for export
+      const offscreen = document.createElement("canvas")
+      offscreen.width  = CANVAS_PX
+      offscreen.height = CANVAS_PX
+      const ctx = offscreen.getContext("2d")
+      if (!ctx) return
+
+      // White background
+      ctx.fillStyle = "#FFFFFF"
+      ctx.fillRect(0, 0, CANVAS_PX, CANVAS_PX)
+
+      // Draw committed pixels (no grid lines)
+      for (const [key, color] of drawnPixels.current) {
+        if (color === "#FFFFFF" || color === "#ffffff") continue
+        const [x, y] = key.split(",").map(Number)
+        ctx.fillStyle = color
+        ctx.fillRect(x! * PIXEL_SIZE, y! * PIXEL_SIZE, PIXEL_SIZE, PIXEL_SIZE)
+      }
+
+      // Draw queued pixels on top
+      for (const [key, q] of queueMap.current) {
+        const [x, y] = key.split(",").map(Number)
+        ctx.fillStyle = q.color
+        ctx.fillRect(x! * PIXEL_SIZE, y! * PIXEL_SIZE, PIXEL_SIZE, PIXEL_SIZE)
+      }
+
+      offscreen.toBlob(blob => {
+        if (!blob) return
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement("a")
+        a.href = url
+        a.download = "CommunityCanvas.png"
+        a.click()
+        URL.revokeObjectURL(url)
+      })
+    }
+  }))
 
   // ─── Drawing ────────────────────────────────────────────────────────────────
 
@@ -351,4 +397,4 @@ export function PixelCanvas({ pixels, queue, onPixelClick }: Props) {
       )}
     </>
   )
-}
+})

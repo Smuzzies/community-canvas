@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useState } from "react"
+import { useCallback, useRef, useState } from "react"
 import {
   Box,
   Button,
@@ -23,7 +23,7 @@ import { LuDownload, LuRefreshCw, LuPalette } from "react-icons/lu"
 import { useWallet, TransactionModal, useTransactionModal } from "@vechain/vechain-kit"
 import { useCanvasPixels } from "@/hooks/useCanvasPixels"
 import { usePaintPixels } from "@/hooks/usePaintPixels"
-import { PixelCanvas } from "./PixelCanvas"
+import { PixelCanvas, type PixelCanvasHandle } from "./PixelCanvas"
 import { ColorPicker } from "./ColorPicker"
 import { PixelQueue } from "./PixelQueue"
 import type { QueuedPixel } from "@/lib/types"
@@ -39,6 +39,7 @@ export function CanvasPanel() {
   const [selectedColor, setSelectedColor] = useState("#344E5B")
   const [selectedPixel, setSelectedPixel] = useState<{ x: number; y: number } | null>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const canvasRef = useRef<PixelCanvasHandle>(null)
 
   const { paintPixels, status, txReceipt, resetStatus, isTransactionPending, error } = usePaintPixels()
   const { open: openTxModal, close: closeTxModal, isOpen: isTxModalOpen } = useTransactionModal()
@@ -73,22 +74,7 @@ export function CanvasPanel() {
   }, [queue, paintPixels, openTxModal])
 
   const handleDownload = useCallback(() => {
-    const canvases = document.querySelectorAll("canvas")
-    const base = canvases[0] as HTMLCanvasElement | undefined
-    if (!base) return
-    const composite = document.createElement("canvas")
-    composite.width = base.width
-    composite.height = base.height
-    const ctx = composite.getContext("2d")
-    if (!ctx) return
-    canvases.forEach(c => { if (c !== canvases[2]) ctx.drawImage(c, 0, 0) }) // skip magnifier canvas
-    composite.toBlob(blob => {
-      if (!blob) return
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement("a")
-      a.href = url; a.download = "CommunityCanvas.png"; a.click()
-      URL.revokeObjectURL(url)
-    })
+    canvasRef.current?.downloadPNG()
   }, [])
 
   // Sidebar content — shared between desktop sidebar and mobile drawer
@@ -166,7 +152,7 @@ export function CanvasPanel() {
 
         {/* Canvas with loading overlay */}
         <Box position="relative" w="full">
-          <PixelCanvas pixels={pixels} queue={queue} onPixelClick={handlePixelClick} />
+          <PixelCanvas ref={canvasRef} pixels={pixels} queue={queue} onPixelClick={handlePixelClick} />
 
           {showInitialLoader && (
             <Flex position="absolute" inset={0} align="center" justify="center" bg="rgba(255,255,255,0.92)" zIndex={10}>
