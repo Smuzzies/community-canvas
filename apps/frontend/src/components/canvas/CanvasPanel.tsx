@@ -18,6 +18,7 @@ import {
   DrawerCloseTrigger,
   DrawerBackdrop,
 } from "@chakra-ui/react"
+import { RecentPainters } from "./RecentPainters"
 import { LuDownload, LuRefreshCw, LuPalette } from "react-icons/lu"
 import { useWallet, TransactionModal, useTransactionModal } from "@vechain/vechain-kit"
 import { useCanvasPixels } from "@/hooks/useCanvasPixels"
@@ -25,7 +26,6 @@ import { usePaintPixels } from "@/hooks/usePaintPixels"
 import { PixelCanvas } from "./PixelCanvas"
 import { ColorPicker } from "./ColorPicker"
 import { PixelQueue } from "./PixelQueue"
-import { RecentPainters } from "./RecentPainters"
 import type { QueuedPixel } from "@/lib/types"
 import { CANVAS_SIZE } from "@/lib/contract"
 
@@ -134,10 +134,6 @@ export function CanvasPanel() {
         isConnected={isConnected}
       />
 
-      <Separator />
-
-      <RecentPainters pixels={pixels} isLoading={isLoading} />
-
       <Box pt={2}>
         <Text fontSize="xs" color="text.subtle">
           Click any pixel to queue it. Choose a color, then write all queued pixels to VeChain in one transaction.
@@ -147,6 +143,7 @@ export function CanvasPanel() {
   )
 
   return (
+    <VStack gap={6} align="stretch">
     <Flex gap={6} direction={{ base: "column", lg: "row" }} align={{ base: "stretch", lg: "start" }}>
 
       {/* ── Canvas column ── */}
@@ -259,5 +256,12 @@ export function CanvasPanel() {
         }}
       />
     </Flex>
+
+    {/* ── Recent Painters — full width below canvas+sidebar ── */}
+    <Box w="full">
+      <Separator mb={4} />
+      <RecentPainters pixels={pixels} isLoading={isLoading} />
+    </Box>
+    </VStack>
   )
 }

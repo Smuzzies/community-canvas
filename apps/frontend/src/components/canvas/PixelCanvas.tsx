@@ -287,13 +287,22 @@ export function PixelCanvas({ pixels, queue, onPixelClick }: Props) {
     onPixelClick(coords.pixelX, coords.pixelY)
   }, [clientToPixel, onPixelClick])
 
-  // Mouse wheel zoom
-  const handleWheel = useCallback((e: React.WheelEvent<HTMLDivElement>) => {
-    e.preventDefault()
-    const delta = e.deltaY < 0 ? 1.1 : 0.9
-    scale.current = Math.max(MIN_SCALE, Math.min(MAX_SCALE, scale.current * delta))
-    clampPan()
-    applyTransform()
+  // Mouse wheel zoom — attached via useEffect with { passive: false } so
+  // preventDefault() actually works. React synthetic onWheel is passive in
+  // some browsers and cannot prevent the page from scrolling.
+  useEffect(() => {
+    const overlay = overlayCanvasRef.current
+    if (!overlay) return
+    const onWheel = (e: WheelEvent) => {
+      // Only zoom when the pointer is actually over the canvas
+      e.preventDefault()
+      const delta = e.deltaY < 0 ? 1.1 : 0.9
+      scale.current = Math.max(MIN_SCALE, Math.min(MAX_SCALE, scale.current * delta))
+      clampPan()
+      applyTransform()
+    }
+    overlay.addEventListener("wheel", onWheel, { passive: false })
+    return () => overlay.removeEventListener("wheel", onWheel)
   }, [clampPan, applyTransform])
 
   // ─── Touch events (mobile) ───────────────────────────────────────────────────
@@ -376,7 +385,6 @@ export function PixelCanvas({ pixels, queue, onPixelClick }: Props) {
         w="full"
         maxW={`${CANVAS_PX}px`}
         lineHeight={0}
-        onWheel={handleWheel}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
@@ -440,15 +448,15 @@ export function PixelCanvas({ pixels, queue, onPixelClick }: Props) {
             minW="140px"
           >
             <Text fontWeight="bold">({tooltip.x}, {tooltip.y})</Text>
-            <Box display="flex" alignItems="center" gap={1} mt={1}>
+            <Box display="flex" alignItems="center" gap={1} mt={2}>
               <Box w={3} h={3} borderRadius="sm" bg={tooltip.pixel.color} border="1px solid rgba(255,255,255,0.3)" flexShrink={0} />
               <Text opacity={0.8}>{tooltip.pixel.color.toUpperCase()}</Text>
             </Box>
             {tooltip.pixel.blockNumber > 0 && (
-              <Text opacity={0.6} mt={1}>by {shortAddress(tooltip.pixel.painter)}</Text>
+              <Text opacity={0.6} mt={2}>by {shortAddress(tooltip.pixel.painter)}</Text>
             )}
             {tooltip.pixel.blockNumber === 0 && (
-              <Text opacity={0.4} mt={1}>unpainted</Text>
+              <Text opacity={0.4} mt={2}>unpainted</Text>
             )}
           </Box>
         )}
