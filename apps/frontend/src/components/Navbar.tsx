@@ -9,6 +9,7 @@ export function Navbar() {
     <Box as="nav" bg="bg.secondary" px={4} py={3} borderBottomWidth="1px">
       <Flex maxW="breakpoint-xl" mx="auto" align="center" justify="space-between">
         <HStack gap={2}>
+          <img src="/favicon.png" alt="" width={28} height={28} style={{ borderRadius: 4 }} />
           <Text fontSize="xl" fontWeight="bold" letterSpacing="tight">
             Community Canvas
           </Text>
@@ -17,8 +18,8 @@ export function Navbar() {
           </Text>
         </HStack>
         <HStack gap={2}>
-          <ColorModeButton />
           <WalletButton />
+          <ColorModeButton />
         </HStack>
       </Flex>
     </Box>
