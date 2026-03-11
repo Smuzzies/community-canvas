@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react"
 import { Box, Text } from "@chakra-ui/react"
+import { useVechainDomain } from "@vechain/vechain-kit"
 import { CANVAS_SIZE, shortAddress } from "@/lib/contract"
 import type { Pixel, QueuedPixel } from "@/lib/types"
 
@@ -12,6 +13,45 @@ const CANVAS_PX  = CANVAS_SIZE * PIXEL_SIZE  // 600
 const MAG_RADIUS = 4                                        // cells around cursor
 const MAG_CELL   = 12                                       // px per magnified cell
 const MAG_SIZE   = (MAG_RADIUS * 2 + 1) * MAG_CELL         // total magnifier size
+
+/** Tooltip component — needs its own scope to call useVechainDomain hook */
+function PixelTooltip({ x, y, pixel, screenX, screenY }: {
+  x: number; y: number; pixel: Pixel; screenX: number; screenY: number
+}) {
+  const { data: domainData } = useVechainDomain(
+    pixel.blockNumber > 0 ? pixel.painter : null
+  )
+  const painterLabel = domainData?.domain ?? shortAddress(pixel.painter)
+
+  return (
+    <Box
+      position="fixed"
+      left={screenX + 14}
+      top={screenY - 10}
+      bg="gray.900"
+      color="white"
+      px={3} py={2}
+      borderRadius="md"
+      fontSize="xs"
+      pointerEvents="none"
+      zIndex={1000}
+      boxShadow="lg"
+      minW="150px"
+    >
+      <Text fontWeight="bold">({x}, {y})</Text>
+      <Box display="flex" alignItems="center" gap={1} mt={2}>
+        <Box w={3} h={3} borderRadius="sm" bg={pixel.color} border="1px solid rgba(255,255,255,0.3)" flexShrink={0} />
+        <Text opacity={0.8}>{pixel.color.toUpperCase()}</Text>
+      </Box>
+      {pixel.blockNumber > 0 && (
+        <Text opacity={0.6} mt={2}>by {painterLabel}</Text>
+      )}
+      {pixel.blockNumber === 0 && (
+        <Text opacity={0.4} mt={2}>unpainted</Text>
+      )}
+    </Box>
+  )
+}
 
 interface Props {
   pixels: Pixel[]
@@ -277,32 +317,13 @@ export function PixelCanvas({ pixels, queue, onPixelClick }: Props) {
 
         {/* Tooltip */}
         {tooltip.visible && tooltip.pixel && (
-          <Box
-            position="fixed"
-            left={tooltip.screenX + 14}
-            top={tooltip.screenY - 10}
-            bg="gray.900"
-            color="white"
-            px={3} py={2}
-            borderRadius="md"
-            fontSize="xs"
-            pointerEvents="none"
-            zIndex={1000}
-            boxShadow="lg"
-            minW="140px"
-          >
-            <Text fontWeight="bold">({tooltip.x}, {tooltip.y})</Text>
-            <Box display="flex" alignItems="center" gap={1} mt={2}>
-              <Box w={3} h={3} borderRadius="sm" bg={tooltip.pixel.color} border="1px solid rgba(255,255,255,0.3)" flexShrink={0} />
-              <Text opacity={0.8}>{tooltip.pixel.color.toUpperCase()}</Text>
-            </Box>
-            {tooltip.pixel.blockNumber > 0 && (
-              <Text opacity={0.6} mt={2}>by {shortAddress(tooltip.pixel.painter)}</Text>
-            )}
-            {tooltip.pixel.blockNumber === 0 && (
-              <Text opacity={0.4} mt={2}>unpainted</Text>
-            )}
-          </Box>
+          <PixelTooltip
+            x={tooltip.x}
+            y={tooltip.y}
+            pixel={tooltip.pixel}
+            screenX={tooltip.screenX}
+            screenY={tooltip.screenY}
+          />
         )}
       </Box>
 
