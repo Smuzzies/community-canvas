@@ -15,7 +15,7 @@ export interface UseColorModeReturn {
 }
 
 export function ColorModeProvider(props: ThemeProviderProps) {
-  return <ThemeProvider attribute="class" disableTransitionOnChange {...props} />
+  return <ThemeProvider attribute="class" defaultTheme="light" disableTransitionOnChange {...props} />
 }
 
 export function useColorMode(): UseColorModeReturn {
