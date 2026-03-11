@@ -61,6 +61,11 @@ interface Props {
   pixels: Pixel[]
   queue: QueuedPixel[]
   onPixelClick: (x: number, y: number) => void
+  /** Mobile crosshair: highlight this pixel on the overlay */
+  cursorPixel?: { x: number; y: number } | null
+  /** If true, touch taps move the cursor without queuing */
+  mobileCursorMode?: boolean
+  onCursorMove?: (x: number, y: number) => void
 }
 
 interface TooltipState {
@@ -72,7 +77,7 @@ interface TooltipState {
   screenY: number
 }
 
-export const PixelCanvas = forwardRef<PixelCanvasHandle, Props>(function PixelCanvas({ pixels, queue, onPixelClick }, ref) {
+export const PixelCanvas = forwardRef<PixelCanvasHandle, Props>(function PixelCanvas({ pixels, queue, onPixelClick, cursorPixel, mobileCursorMode, onCursorMove }, ref) {
   const baseCanvasRef    = useRef<HTMLCanvasElement>(null)
   const overlayCanvasRef = useRef<HTMLCanvasElement>(null)
   const magCanvasRef     = useRef<HTMLCanvasElement>(null)
@@ -180,7 +185,9 @@ export const PixelCanvas = forwardRef<PixelCanvasHandle, Props>(function PixelCa
     }
   }, [drawBasePixel])
 
-  const drawOverlay = useCallback((queue: QueuedPixel[]) => {
+  const cursorPixelRef = useRef<{ x: number; y: number } | null>(null)
+
+  const drawOverlay = useCallback((queue: QueuedPixel[], cursor?: { x: number; y: number } | null) => {
     const canvas = overlayCanvasRef.current
     if (!canvas) return
     const ctx = canvas.getContext("2d")
@@ -192,6 +199,32 @@ export const PixelCanvas = forwardRef<PixelCanvasHandle, Props>(function PixelCa
       ctx.strokeStyle = "rgba(255,255,255,0.9)"
       ctx.lineWidth = 1.5
       ctx.strokeRect(q.x * PIXEL_SIZE + 1, q.y * PIXEL_SIZE + 1, PIXEL_SIZE - 2, PIXEL_SIZE - 2)
+    }
+    // Mobile cursor crosshair
+    const cur = cursor !== undefined ? cursor : cursorPixelRef.current
+    if (cur) {
+      const cx = cur.x * PIXEL_SIZE
+      const cy = cur.y * PIXEL_SIZE
+      // Outer white ring
+      ctx.strokeStyle = "rgba(255,255,255,0.95)"
+      ctx.lineWidth = 2
+      ctx.strokeRect(cx + 0.5, cy + 0.5, PIXEL_SIZE - 1, PIXEL_SIZE - 1)
+      // Inner dark ring
+      ctx.strokeStyle = "rgba(0,0,0,0.85)"
+      ctx.lineWidth = 1
+      ctx.strokeRect(cx + 2, cy + 2, PIXEL_SIZE - 4, PIXEL_SIZE - 4)
+      // Corner accents
+      ctx.strokeStyle = "#FF3B6A"
+      ctx.lineWidth = 1.5
+      const a = 2
+      ;[
+        [cx - a, cy + PIXEL_SIZE / 2, cx + a, cy + PIXEL_SIZE / 2],
+        [cx + PIXEL_SIZE + a, cy + PIXEL_SIZE / 2, cx + PIXEL_SIZE - a, cy + PIXEL_SIZE / 2],
+        [cx + PIXEL_SIZE / 2, cy - a, cx + PIXEL_SIZE / 2, cy + a],
+        [cx + PIXEL_SIZE / 2, cy + PIXEL_SIZE + a, cx + PIXEL_SIZE / 2, cy + PIXEL_SIZE - a],
+      ].forEach(([x1, y1, x2, y2]) => {
+        ctx.beginPath(); ctx.moveTo(x1!, y1!); ctx.lineTo(x2!, y2!); ctx.stroke()
+      })
     }
   }, [])
 
@@ -259,8 +292,13 @@ export const PixelCanvas = forwardRef<PixelCanvasHandle, Props>(function PixelCa
     const map = new Map<string, QueuedPixel>()
     for (const q of queue) map.set(`${q.x},${q.y}`, q)
     queueMap.current = map
-    drawOverlay(queue)
+    drawOverlay(queue, cursorPixelRef.current)
   }, [queue, drawOverlay])
+
+  useEffect(() => {
+    cursorPixelRef.current = cursorPixel ?? null
+    drawOverlay(queue, cursorPixel ?? null)
+  }, [cursorPixel, queue, drawOverlay])
 
   // ─── Coordinate helper ───────────────────────────────────────────────────────
 
@@ -309,15 +347,36 @@ export const PixelCanvas = forwardRef<PixelCanvasHandle, Props>(function PixelCa
     onPixelClick(coords.pixelX, coords.pixelY)
   }, [clientToPixel, onPixelClick])
 
-  // ─── Touch: tap to select pixel (no zoom/pan) ────────────────────────────────
+  // ─── Touch: tap to move cursor or click ────────────────────────────────────
+  // Attached via useEffect with { passive: false } so preventDefault() works
+  // (React synthetic onTouchEnd is passive and cannot prevent synthetic clicks)
 
-  const handleTouchEnd = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
-    if (e.changedTouches.length === 1 && e.touches.length === 0) {
-      const touch  = e.changedTouches[0]!
-      const coords = clientToPixel(touch.clientX, touch.clientY)
-      if (coords) onPixelClick(coords.pixelX, coords.pixelY)
+  const mobileCursorModeRef = useRef(mobileCursorMode)
+  const onCursorMoveRef     = useRef(onCursorMove)
+  const onPixelClickRef     = useRef(onPixelClick)
+  useEffect(() => { mobileCursorModeRef.current = mobileCursorMode }, [mobileCursorMode])
+  useEffect(() => { onCursorMoveRef.current = onCursorMove }, [onCursorMove])
+  useEffect(() => { onPixelClickRef.current = onPixelClick }, [onPixelClick])
+
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container) return
+    const handler = (e: TouchEvent) => {
+      e.preventDefault()   // blocks synthetic mouse click
+      if (e.changedTouches.length === 1 && e.touches.length === 0) {
+        const touch  = e.changedTouches[0]!
+        const coords = clientToPixel(touch.clientX, touch.clientY)
+        if (!coords) return
+        if (mobileCursorModeRef.current && onCursorMoveRef.current) {
+          onCursorMoveRef.current(coords.pixelX, coords.pixelY)
+        } else {
+          onPixelClickRef.current(coords.pixelX, coords.pixelY)
+        }
+      }
     }
-  }, [clientToPixel, onPixelClick])
+    container.addEventListener("touchend", handler, { passive: false })
+    return () => container.removeEventListener("touchend", handler)
+  }, [clientToPixel])  // clientToPixel is stable; refs handle the rest
 
   // ─── Render ──────────────────────────────────────────────────────────────────
 
@@ -329,7 +388,6 @@ export const PixelCanvas = forwardRef<PixelCanvasHandle, Props>(function PixelCa
         w="full"
         maxW={`${CANVAS_PX}px`}
         lineHeight={0}
-        onTouchEnd={handleTouchEnd}
         userSelect="none"
       >
         {/* Base layer */}
@@ -356,7 +414,7 @@ export const PixelCanvas = forwardRef<PixelCanvasHandle, Props>(function PixelCa
             imageRendering: "pixelated",
             cursor: "crosshair",
           }}
-          onClick={handleClick}
+          onClick={mobileCursorMode ? undefined : handleClick}
           onMouseMove={handleMouseMove}
           onMouseLeave={handleMouseLeave}
         />

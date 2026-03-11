@@ -20,17 +20,21 @@ const PALETTE = [
 interface Props {
   selected: string
   onChange: (color: string) => void
+  /** Compact mode: hide label and custom color input (for mobile drawer) */
+  compact?: boolean
 }
 
-export function ColorPicker({ selected, onChange }: Props) {
+export function ColorPicker({ selected, onChange, compact }: Props) {
   return (
     <Box>
-      <Text fontWeight="semibold" mb={2} fontSize="sm">
-        Color
-      </Text>
+      {!compact && (
+        <Text fontWeight="semibold" mb={2} fontSize="sm">
+          Color
+        </Text>
+      )}
 
       {/* Palette swatches */}
-      <Grid templateColumns="repeat(6, 1fr)" gap={1} mb={3}>
+      <Grid templateColumns="repeat(6, 1fr)" gap={1} mb={compact ? 0 : 3}>
         {PALETTE.map(({ color, label }) => (
           <Box
             key={color}
@@ -51,11 +55,11 @@ export function ColorPicker({ selected, onChange }: Props) {
       </Grid>
 
       {/* Custom color input */}
-      <HStack gap={2} align="center">
-        <Text fontSize="xs" color="text.subtle">
-          Custom:
-        </Text>
-        <Box position="relative" w={8} h={7} flexShrink={0}>
+      <HStack gap={2} align="center" mt={compact ? 2 : 0}>
+        {!compact && (
+          <Text fontSize="xs" color="text.subtle">Custom:</Text>
+        )}
+        <Box position="relative" w={8} h={7} flexShrink={0} title="Custom color">
           <input
             id="custom-color"
             type="color"
@@ -80,9 +84,11 @@ export function ColorPicker({ selected, onChange }: Props) {
             pointerEvents="none"
           />
         </Box>
-        <Text fontSize="xs" color="text.subtle" fontFamily="mono">
-          {selected.toUpperCase()}
-        </Text>
+        {!compact && (
+          <Text fontSize="xs" color="text.subtle" fontFamily="mono">
+            {selected.toUpperCase()}
+          </Text>
+        )}
       </HStack>
     </Box>
   )

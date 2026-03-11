@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import {
   Box,
   Button,
@@ -11,15 +11,10 @@ import {
   Text,
   VStack,
   Badge,
-  DrawerRoot,
-  DrawerContent,
-  DrawerHeader,
-  DrawerBody,
-  DrawerCloseTrigger,
-  DrawerBackdrop,
 } from "@chakra-ui/react"
 import { RecentPainters } from "./RecentPainters"
-import { LuDownload, LuRefreshCw, LuPalette } from "react-icons/lu"
+import { DPad } from "./DPad"
+import { LuDownload, LuRefreshCw } from "react-icons/lu"
 import { useWallet, TransactionModal, useTransactionModal } from "@vechain/vechain-kit"
 import { useCanvasPixels } from "@/hooks/useCanvasPixels"
 import { usePaintPixels } from "@/hooks/usePaintPixels"
@@ -38,8 +33,17 @@ export function CanvasPanel() {
   const [queue, setQueue] = useState<QueuedPixel[]>([])
   const [selectedColor, setSelectedColor] = useState("#344E5B")
   const [selectedPixel, setSelectedPixel] = useState<{ x: number; y: number } | null>(null)
-  const [drawerOpen, setDrawerOpen] = useState(false)
+  const [mobileCursor, setMobileCursor] = useState<{ x: number; y: number } | null>(null)
+  const [isMobile, setIsMobile] = useState(true)  // default true; effect corrects on desktop
   const canvasRef = useRef<PixelCanvasHandle>(null)
+
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 991px)")
+    setIsMobile(mq.matches)
+    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches)
+    mq.addEventListener("change", handler)
+    return () => mq.removeEventListener("change", handler)
+  }, [])
 
   const { paintPixels, status, txReceipt, resetStatus, isTransactionPending, error } = usePaintPixels()
   const { open: openTxModal, close: closeTxModal, isOpen: isTxModalOpen } = useTransactionModal()
@@ -57,12 +61,21 @@ export function CanvasPanel() {
     })
   }, [selectedColor])
 
+  const handleCursorMove = useCallback((x: number, y: number) => {
+    setMobileCursor({ x, y })
+  }, [])
+
+  const handleDPadPaint = useCallback(() => {
+    if (!mobileCursor) return
+    handlePixelClick(mobileCursor.x, mobileCursor.y)
+  }, [mobileCursor, handlePixelClick])
+
   const handleRemoveFromQueue = useCallback((x: number, y: number) => {
     setQueue(prev => prev.filter(p => !(p.x === x && p.y === y)))
   }, [])
 
-  const handleClearQueue  = useCallback(() => setQueue([]), [])
-  const handleUndo        = useCallback(() => setQueue(prev => prev.slice(0, -1)), [])
+  const handleClearQueue = useCallback(() => setQueue([]), [])
+  const handleUndo       = useCallback(() => setQueue(prev => prev.slice(0, -1)), [])
 
   const handlePaint = useCallback(async () => {
     if (queue.length === 0) return
@@ -77,13 +90,11 @@ export function CanvasPanel() {
     canvasRef.current?.downloadPNG()
   }, [])
 
-  // Sidebar content — shared between desktop sidebar and mobile drawer
-  const sidebarContent = (
+  // Desktop sidebar content
+  const desktopSidebar = (
     <VStack gap={4} align="stretch">
       <ColorPicker selected={selectedColor} onChange={setSelectedColor} />
-
       <Separator />
-
       {selectedPixel && (
         <Box>
           <Text fontSize="sm" color="text.subtle" mb={2}>
@@ -93,23 +104,17 @@ export function CanvasPanel() {
             </Text>
           </Text>
           <Button
-            size="sm"
-            variant="outline"
-            w="full"
+            size="sm" variant="outline" w="full"
             onClick={() => handlePixelClick(selectedPixel.x, selectedPixel.y)}>
             Queue ({selectedPixel.x}, {selectedPixel.y}) with{" "}
-            <Box
-              as="span" display="inline-block" w={3} h={3}
+            <Box as="span" display="inline-block" w={3} h={3}
               bg={selectedColor} border="1px solid currentColor"
-              borderRadius="2px" mx={1}
-            />{" "}
+              borderRadius="2px" mx={1} />{" "}
             {selectedColor.toUpperCase()}
           </Button>
         </Box>
       )}
-
       <Separator />
-
       <PixelQueue
         queue={queue}
         onRemove={handleRemoveFromQueue}
@@ -119,7 +124,6 @@ export function CanvasPanel() {
         isPainting={isTransactionPending}
         isConnected={isConnected}
       />
-
       <Box pt={2}>
         <Text fontSize="xs" color="text.subtle">
           Click any pixel to queue it. Choose a color, then write all queued pixels to VeChain in one transaction.
@@ -130,101 +134,117 @@ export function CanvasPanel() {
 
   return (
     <VStack gap={6} align="stretch">
-    <Flex gap={6} direction={{ base: "column", lg: "row" }} align={{ base: "stretch", lg: "start" }}>
 
-      {/* ── Canvas column ── */}
-      <VStack gap={3} align="center" flex="0 0 auto" w={{ base: "full", lg: `${CANVAS_SIZE * 6}px` }}>
-        {/* Toolbar */}
-        <Flex w="full" justify="space-between" align="center">
-          <HStack gap={2}>
-            <Text fontWeight="bold" fontSize="sm">Community Canvas</Text>
-            <Badge colorPalette="green" size="sm">Mainnet</Badge>
-          </HStack>
-          <HStack gap={1}>
-            <Button size="xs" variant="ghost" onClick={() => refetch()} disabled={isRefetching} aria-label="Refresh">
-              <LuRefreshCw style={{ opacity: isRefetching ? 0.5 : 1 }} />
-            </Button>
-            <Button size="xs" variant="ghost" onClick={handleDownload} aria-label="Download PNG">
-              <LuDownload />
-            </Button>
-          </HStack>
-        </Flex>
+      {/* ── Mobile controls (above canvas) — hidden on desktop ── */}
+      <Box display={{ base: "block", lg: "none" }}>
+        <VStack gap={3} align="stretch">
+          {/* Row 1: color swatches + D-pad side by side */}
+          <Flex gap={4} align="center" justify="space-between">
+            <Box flex={1}>
+              <ColorPicker selected={selectedColor} onChange={setSelectedColor} compact />
+            </Box>
+            <DPad
+              cursor={mobileCursor}
+              onMove={handleCursorMove}
+              onPaint={handleDPadPaint}
+            />
+          </Flex>
 
-        {/* Canvas with loading overlay */}
-        <Box position="relative" w="full">
-          <PixelCanvas ref={canvasRef} pixels={pixels} queue={queue} onPixelClick={handlePixelClick} />
-
-          {showInitialLoader && (
-            <Flex position="absolute" inset={0} align="center" justify="center" bg="rgba(255,255,255,0.92)" zIndex={10}>
-              <VStack gap={3}>
-                <Spinner size="lg" />
-                <Text fontSize="sm" color="text.subtle">Loading canvas from chain...</Text>
-              </VStack>
-            </Flex>
-          )}
-
-          {isFetching && !showInitialLoader && (
-            <Box position="absolute" top={2} right={2} w={2} h={2} borderRadius="full" bg="blue.400" opacity={0.7} title="Syncing..." />
-          )}
-        </Box>
-
-        {selectedPixel && (
-          <Text fontSize="xs" color="text.subtle">
-            Selected: ({selectedPixel.x}, {selectedPixel.y})
-          </Text>
-        )}
-
-        {/* Mobile: queue badge + open drawer button */}
-        <Box display={{ base: "flex", lg: "none" }} w="full">
-          <Button
-            w="full"
-            colorPalette="blue"
-            variant="outline"
-            onClick={() => setDrawerOpen(true)}
-          >
-            <LuPalette />
-            Paint Controls
-            {queue.length > 0 && (
-              <Badge colorPalette="blue" ml={2}>{queue.length}</Badge>
+          {/* Row 2: hint or cursor coords + queue button */}
+          <Flex align="center" justify="space-between" gap={2}>
+            {mobileCursor ? (
+              <Text fontSize="xs" color="text.subtle" fontFamily="mono">
+                Cursor: ({mobileCursor.x}, {mobileCursor.y})
+              </Text>
+            ) : (
+              <Text fontSize="xs" color="blue.400">
+                Tap the canvas below to place the crosshair
+              </Text>
             )}
-          </Button>
-        </Box>
-      </VStack>
+            {queue.length > 0 && (
+              <Badge colorPalette="blue" flexShrink={0}>{queue.length} queued</Badge>
+            )}
+          </Flex>
 
-      {/* ── Desktop sidebar ── */}
-      <Box
-        display={{ base: "none", lg: "block" }}
-        flex={1}
-        minW="280px"
-        maxW="340px"
-      >
-        {sidebarContent}
+          {/* Row 3: submit + undo/clear */}
+          {queue.length > 0 && (
+            <VStack gap={2} align="stretch">
+              <Button
+                colorPalette="blue" size="sm" w="full"
+                onClick={handlePaint}
+                disabled={!isConnected || isTransactionPending}
+                loading={isTransactionPending}
+                loadingText="Signing...">
+                {!isConnected
+                  ? "Connect Wallet to Paint"
+                  : `Write ${queue.length} Pixel${queue.length !== 1 ? "s" : ""} to Chain`}
+              </Button>
+              <HStack gap={2} justify="flex-end">
+                <Button size="xs" variant="ghost" onClick={handleUndo} disabled={isTransactionPending}>
+                  Undo
+                </Button>
+                <Button size="xs" variant="ghost" colorPalette="red" onClick={handleClearQueue} disabled={isTransactionPending}>
+                  Clear all
+                </Button>
+              </HStack>
+            </VStack>
+          )}
+        </VStack>
+
+        <Separator mt={3} />
       </Box>
 
-      {/* ── Mobile bottom drawer ── */}
-      <DrawerRoot
-        open={drawerOpen}
-        onOpenChange={e => setDrawerOpen(e.open)}
-        placement="bottom"
-      >
-        <DrawerBackdrop />
-        <DrawerContent
-          borderTopRadius="xl"
-          maxH="85vh"
-        >
-          <DrawerHeader borderBottomWidth="1px" pb={3}>
-            <Flex justify="space-between" align="center">
-              <Text fontWeight="bold">Paint Controls</Text>
-              <DrawerCloseTrigger asChild>
-                <Button size="sm" variant="ghost" aria-label="Close">✕</Button>
-              </DrawerCloseTrigger>
-            </Flex>
-          </DrawerHeader>
-          <DrawerBody pb={8} overflowY="auto">
-            {sidebarContent}
-          </DrawerBody>
-        </DrawerContent>
-      </DrawerRoot>
+      {/* ── Main row: canvas + desktop sidebar ── */}
+      <Flex gap={6} direction={{ base: "column", lg: "row" }} align={{ base: "stretch", lg: "start" }}>
+
+        {/* Canvas column */}
+        <VStack gap={3} align="center" flex="0 0 auto" w={{ base: "full", lg: `${CANVAS_SIZE * 6}px` }}>
+          {/* Toolbar */}
+          <Flex w="full" justify="space-between" align="center">
+            <HStack gap={2}>
+              <Text fontWeight="bold" fontSize="sm">Community Canvas</Text>
+              <Badge colorPalette="green" size="sm">Mainnet</Badge>
+            </HStack>
+            <HStack gap={1}>
+              <Button size="xs" variant="ghost" onClick={() => refetch()} disabled={isRefetching} aria-label="Refresh">
+                <LuRefreshCw style={{ opacity: isRefetching ? 0.5 : 1 }} />
+              </Button>
+              <Button size="xs" variant="ghost" onClick={handleDownload} aria-label="Download PNG">
+                <LuDownload />
+              </Button>
+            </HStack>
+          </Flex>
+
+          {/* Canvas */}
+          <Box position="relative" w="full">
+            <PixelCanvas
+              ref={canvasRef}
+              pixels={pixels}
+              queue={queue}
+              onPixelClick={handlePixelClick}
+              cursorPixel={isMobile ? mobileCursor : null}
+              mobileCursorMode={isMobile}
+              onCursorMove={handleCursorMove}
+            />
+            {showInitialLoader && (
+              <Flex position="absolute" inset={0} align="center" justify="center" bg="rgba(255,255,255,0.92)" zIndex={10}>
+                <VStack gap={3}>
+                  <Spinner size="lg" />
+                  <Text fontSize="sm" color="text.subtle">Loading canvas from chain...</Text>
+                </VStack>
+              </Flex>
+            )}
+            {isFetching && !showInitialLoader && (
+              <Box position="absolute" top={2} right={2} w={2} h={2} borderRadius="full" bg="blue.400" opacity={0.7} title="Syncing..." />
+            )}
+          </Box>
+        </VStack>
+
+        {/* Desktop sidebar */}
+        <Box display={{ base: "none", lg: "block" }} flex={1} minW="280px" maxW="340px">
+          {desktopSidebar}
+        </Box>
+      </Flex>
 
       {/* Transaction Modal */}
       <TransactionModal
@@ -241,13 +261,12 @@ export function CanvasPanel() {
           showExplorerButton: true,
         }}
       />
-    </Flex>
 
-    {/* ── Recent Painters — full width below canvas+sidebar ── */}
-    <Box w="full">
-      <Separator mb={4} />
-      <RecentPainters pixels={pixels} isLoading={isLoading} />
-    </Box>
+      {/* Recent Painters */}
+      <Box w="full">
+        <Separator mb={4} />
+        <RecentPainters pixels={pixels} isLoading={isLoading} />
+      </Box>
     </VStack>
   )
 }

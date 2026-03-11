@@ -2,11 +2,22 @@ node_modules/
 .next/
 out/
 dist/
+
+# Environment / secrets — never commit
 .env
 .env.local
+.env.*.local
+*.pem
+*.key
+*.p12
+
+# Build artifacts
 *.tsbuildinfo
 next-env.d.ts
 artifacts/
 cache/
 typechain-types/
 coverage/
+
+# Turbo cache
+.turbo/
