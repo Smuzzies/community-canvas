@@ -7,8 +7,8 @@ const CanvasPanel = dynamic(
   { ssr: false }
 )
 
-const CONTRACT = "0xab1b6732fc6b162653261968f91c67cf0968da41"
-const STATS_URL = `https://vechainstats.com/account/${CONTRACT}/`
+const CONTRACT = "0x755405995c9919fdf5387f73811b7b46f5257d01"
+const STATS_URL = `https://explore.vechain.org/address/${CONTRACT}`
 
 export default function HomePage() {
   return (

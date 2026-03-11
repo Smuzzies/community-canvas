@@ -209,9 +209,9 @@ certbot --nginx -d yourdomain.com
 
 | | |
 |---|---|
-| **Address** | `0xab1b6732fc6b162653261968f91c67cf0968da41` |
+| **Address** | `0x755405995c9919fdf5387f73811b7b46f5257d01` |
 | **Network** | VeChain Mainnet |
-| **Explorer** | [vechainstats.com](https://vechainstats.com/account/0xab1b6732fc6b162653261968f91c67cf0968da41/) |
+| **Explorer** | [vechainstats.com](https://vechainstats.com/account/0x755405995c9919fdf5387f73811b7b46f5257d01/) |
 
 ### Key functions
 

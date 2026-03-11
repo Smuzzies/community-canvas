@@ -39,8 +39,6 @@ export const CONTRACT_ABI = [
     ],
     outputs: [
       { name: "color", type: "uint24" },
-      { name: "painter", type: "address" },
-      { name: "blockNumber", type: "uint32" },
     ],
   },
   {
@@ -53,8 +51,6 @@ export const CONTRACT_ABI = [
     ],
     outputs: [
       { name: "colors", type: "uint24[]" },
-      { name: "painters", type: "address[]" },
-      { name: "blockNumbers", type: "uint32[]" },
     ],
   },
   {
