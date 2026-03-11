@@ -16,6 +16,10 @@ export function VeChainProvider({ children }: Props) {
   const { colorMode } = useColorMode()
   const isDarkMode = colorMode === "dark"
   const networkType = (process.env.NEXT_PUBLIC_NETWORK ?? "main") as "main" | "test"
+  // mainnet.vechain.org blocks browser requests with 403 (no CORS headers).
+  // vethor-node.vechain.com returns access-control-allow-origin: * and is the
+  // official VeChain Foundation public node with CORS support.
+  const nodeUrl = process.env.NEXT_PUBLIC_NODE_URL ?? "https://vethor-node.vechain.com"
 
   return (
     <VeChainKitProvider
@@ -39,7 +43,7 @@ export function VeChainProvider({ children }: Props) {
       ]}
       darkMode={isDarkMode}
       language="en"
-      network={{ type: networkType }}>
+      network={{ type: networkType, nodeUrl }}>
       {children}
     </VeChainKitProvider>
   )
