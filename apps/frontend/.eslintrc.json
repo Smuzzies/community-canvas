@@ -1,0 +1,3 @@
+{
+  "extends": ["@community-canvas/eslint-config/next"]
+}

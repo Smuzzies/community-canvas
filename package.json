@@ -1,0 +1,27 @@
+{
+  "name": "community-canvas",
+  "private": true,
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "lint": "turbo lint",
+    "typecheck": "turbo typecheck",
+    "contracts:compile": "turbo compile --filter=@community-canvas/contracts",
+    "contracts:test": "turbo test --filter=@community-canvas/contracts",
+    "clean": "turbo clean && rm -rf node_modules"
+  },
+  "dependencies": {
+    "turbo": "^2.5.0"
+  },
+  "devDependencies": {
+    "prettier": "^3.3.0"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "engines": {
+    "node": "20.x.x"
+  },
+  "packageManager": "yarn@1.22.22"
+}
