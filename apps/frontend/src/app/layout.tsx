@@ -14,6 +14,9 @@ const ClientApp = dynamic(() => import("./ClientApp").then(mod => mod.ClientApp)
 export const metadata: Metadata = {
   title: "Community Canvas",
   description: "Paint pixels on the VeChain blockchain — Community Canvas",
+  icons: {
+    icon: "/favicon.ico",
+  },
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
