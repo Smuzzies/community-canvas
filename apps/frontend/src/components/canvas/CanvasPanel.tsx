@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useRef, useState } from "react"
+import { useCallback, useState } from "react"
 import {
   Box,
   Button,
@@ -19,7 +19,7 @@ import { usePaintPixels } from "@/hooks/usePaintPixels"
 import { PixelCanvas } from "./PixelCanvas"
 import { ColorPicker } from "./ColorPicker"
 import { PixelQueue } from "./PixelQueue"
-import type { Pixel, QueuedPixel } from "@/lib/types"
+import type { QueuedPixel } from "@/lib/types"
 import { CANVAS_SIZE } from "@/lib/contract"
 
 export function CanvasPanel() {
@@ -27,7 +27,9 @@ export function CanvasPanel() {
   const isConnected = connection.isConnected
 
   // Canvas state
-  const { data: pixels = [], isLoading, refetch, isRefetching } = useCanvasPixels()
+  const { data: pixels = [], isLoading, isFetching, refetch, isRefetching } = useCanvasPixels()
+  // Only show full loading state on the very first fetch (no data yet)
+  const showInitialLoader = isLoading && pixels.length === 0
   const [queue, setQueue] = useState<QueuedPixel[]>([])
   const [selectedColor, setSelectedColor] = useState("#344E5B")
   const [selectedPixel, setSelectedPixel] = useState<{ x: number; y: number } | null>(null)
@@ -36,8 +38,6 @@ export function CanvasPanel() {
   const { paintPixels, status, txReceipt, resetStatus, isTransactionPending, error } =
     usePaintPixels()
   const { open: openTxModal, close: closeTxModal, isOpen: isTxModalOpen } = useTransactionModal()
-
-  const canvasRef = useRef<HTMLCanvasElement | null>(null)
 
   const handlePixelClick = useCallback(
     (x: number, y: number) => {
@@ -62,6 +62,10 @@ export function CanvasPanel() {
 
   const handleClearQueue = useCallback(() => setQueue([]), [])
 
+  const handleUndo = useCallback(() => {
+    setQueue(prev => prev.slice(0, -1))
+  }, [])
+
   const handlePaint = useCallback(async () => {
     if (queue.length === 0) return
     openTxModal()
@@ -74,9 +78,17 @@ export function CanvasPanel() {
   }, [queue, paintPixels, openTxModal])
 
   const handleDownload = useCallback(() => {
-    const canvas = document.querySelector("canvas") as HTMLCanvasElement | null
-    if (!canvas) return
-    canvas.toBlob(blob => {
+    // Composite base + overlay layers into a single image
+    const canvases = document.querySelectorAll("canvas")
+    const base = canvases[0] as HTMLCanvasElement | undefined
+    if (!base) return
+    const composite = document.createElement("canvas")
+    composite.width = base.width
+    composite.height = base.height
+    const ctx = composite.getContext("2d")
+    if (!ctx) return
+    canvases.forEach(c => ctx.drawImage(c, 0, 0))
+    composite.toBlob(blob => {
       if (!blob) return
       const url = URL.createObjectURL(blob)
       const a = document.createElement("a")
@@ -115,25 +127,43 @@ export function CanvasPanel() {
           </HStack>
         </Flex>
 
-        {isLoading ? (
-          <Flex
-            w={`${CANVAS_SIZE * 6}px`}
-            h={`${CANVAS_SIZE * 6}px`}
-            align="center"
-            justify="center"
-            border="1px solid"
-            borderColor="border.primary"
-            borderRadius="sm">
-            <VStack gap={3}>
-              <Spinner size="lg" />
-              <Text fontSize="sm" color="text.subtle">
-                Loading canvas from chain...
-              </Text>
-            </VStack>
-          </Flex>
-        ) : (
+        {/* Canvas is always mounted — spinner overlays on top during initial load */}
+        <Box position="relative">
           <PixelCanvas pixels={pixels} queue={queue} onPixelClick={handlePixelClick} />
-        )}
+
+          {/* Initial load overlay — sits on top, canvas stays mounted underneath */}
+          {showInitialLoader && (
+            <Flex
+              position="absolute"
+              inset={0}
+              align="center"
+              justify="center"
+              bg="rgba(255,255,255,0.92)"
+              zIndex={10}>
+              <VStack gap={3}>
+                <Spinner size="lg" />
+                <Text fontSize="sm" color="text.subtle">
+                  Loading canvas from chain...
+                </Text>
+              </VStack>
+            </Flex>
+          )}
+
+          {/* Subtle sync dot — top right corner during background polls */}
+          {isFetching && !showInitialLoader && (
+            <Box
+              position="absolute"
+              top={2}
+              right={2}
+              w={2}
+              h={2}
+              borderRadius="full"
+              bg="blue.400"
+              opacity={0.7}
+              title="Syncing..."
+            />
+          )}
+        </Box>
 
         {selectedPixel && (
           <Text fontSize="xs" color="text.subtle">
@@ -188,6 +218,7 @@ export function CanvasPanel() {
           queue={queue}
           onRemove={handleRemoveFromQueue}
           onClear={handleClearQueue}
+          onUndo={handleUndo}
           onPaint={handlePaint}
           isPainting={isTransactionPending}
           isConnected={isConnected}

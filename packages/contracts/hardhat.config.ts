@@ -28,6 +28,7 @@ const config: HardhatUserConfig = {
       url: "https://testnet.vechain.org",
       accounts: {
         mnemonic: process.env.MNEMONIC ?? "",
+        path: "m/44'/818'/0'/0",
         count: 3,
       },
     },
@@ -35,6 +36,7 @@ const config: HardhatUserConfig = {
       url: "https://mainnet.vechain.org",
       accounts: {
         mnemonic: process.env.MNEMONIC ?? "",
+        path: "m/44'/818'/0'/0",
         count: 3,
       },
     },

@@ -1,13 +1,14 @@
 "use client"
 
 import { Box, Button, Flex, HStack, Text, VStack } from "@chakra-ui/react"
-import { LuX } from "react-icons/lu"
+import { LuUndo2, LuX } from "react-icons/lu"
 import type { QueuedPixel } from "@/lib/types"
 
 interface Props {
   queue: QueuedPixel[]
   onRemove: (x: number, y: number) => void
   onClear: () => void
+  onUndo: () => void
   onPaint: () => void
   isPainting: boolean
   isConnected: boolean
@@ -17,6 +18,7 @@ export function PixelQueue({
   queue,
   onRemove,
   onClear,
+  onUndo,
   onPaint,
   isPainting,
   isConnected,
@@ -25,7 +27,7 @@ export function PixelQueue({
     return (
       <Box py={4} textAlign="center">
         <Text fontSize="sm" color="text.subtle">
-          Click any pixel on the canvas to select it, then add it to the queue.
+          Click any pixel on the canvas to queue it.
         </Text>
       </Box>
     )
@@ -37,14 +39,25 @@ export function PixelQueue({
         <Text fontWeight="semibold" fontSize="sm">
           Queued Pixels ({queue.length})
         </Text>
-        <Button
-          size="xs"
-          variant="ghost"
-          colorPalette="red"
-          onClick={onClear}
-          disabled={isPainting}>
-          Clear all
-        </Button>
+        <HStack gap={1}>
+          <Button
+            size="xs"
+            variant="ghost"
+            onClick={onUndo}
+            disabled={isPainting || queue.length === 0}
+            aria-label="Undo last pixel"
+            title="Undo last pixel">
+            <LuUndo2 />
+          </Button>
+          <Button
+            size="xs"
+            variant="ghost"
+            colorPalette="red"
+            onClick={onClear}
+            disabled={isPainting}>
+            Clear all
+          </Button>
+        </HStack>
       </Flex>
 
       <VStack gap={1} align="stretch" maxH="200px" overflowY="auto">

@@ -1,13 +1,36 @@
-import { useQuery } from "@tanstack/react-query"
+import { keepPreviousData, useQuery } from "@tanstack/react-query"
 import { useThor } from "@vechain/vechain-kit"
-import { CONTRACT_ADDRESS, CONTRACT_ABI, CANVAS_SIZE, uint24ToHex } from "@/lib/contract"
+import { CONTRACT_ADDRESS, CANVAS_SIZE, uint24ToHex } from "@/lib/contract"
 import type { Pixel } from "@/lib/types"
 
-const PAINTED_TOPIC = "0x" + // keccak256("Painted(uint16,uint16,uint24,address,uint32)")
-  // Pre-computed: matches the event signature in CommunityCanvas.sol
-  "ac0c2140378851136f958deb3f6561932f50973162a62cdc254ca6a68e470eb5"
+// keccak256("Painted(uint16,uint16,uint24,address,uint32)")
+// Verified against deployed contract on mainnet
+const PAINTED_TOPIC = "0x6db073b5c12d206a90d252ae6e2c67f7d6450410a616e933c4658dc96093015c"
 
-/** Fetch the full 100x100 canvas state by reading all Painted events from the chain */
+/**
+ * Decode a single Painted event log into a Pixel.
+ *
+ * Event signature: Painted(uint16 indexed x, uint16 indexed y, uint24 color, address indexed painter, uint32 blockNumber)
+ *
+ * topics[0] = event sig
+ * topics[1] = x (indexed uint16, padded to 32 bytes)
+ * topics[2] = y (indexed uint16, padded to 32 bytes)
+ * topics[3] = painter (indexed address, padded to 32 bytes)
+ * data      = abi.encode(color uint24, blockNumber uint32) — each padded to 32 bytes
+ */
+function decodeEvent(ev: { topics: string[]; data: string }): Pixel {
+  const x = parseInt(ev.topics[1]!, 16)
+  const y = parseInt(ev.topics[2]!, 16)
+  const painter = "0x" + ev.topics[3]!.slice(26) // last 20 bytes of 32-byte padded address
+
+  const data = ev.data.replace("0x", "")
+  const color = parseInt(data.slice(0, 64), 16)        // first 32 bytes = color uint24
+  const blockNumber = parseInt(data.slice(64, 128), 16) // second 32 bytes = blockNumber uint32
+
+  return { x, y, color: uint24ToHex(color), painter, blockNumber }
+}
+
+/** Fetch the full canvas state by reading all Painted events via ThorClient (no CORS issues) */
 export function useCanvasPixels() {
   const thor = useThor()
 
@@ -16,49 +39,29 @@ export function useCanvasPixels() {
     queryFn: async (): Promise<Pixel[]> => {
       if (!thor) return []
 
-      // Fetch ALL Painted events from genesis to now
-      const response = await fetch(`${thor.httpClient.baseURL}/logs/event`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify({
-          range: { unit: "block", from: 0, to: 2 ** 32 - 1 },
-          options: { offset: 0, limit: 100000 },
-          criteriaSet: [{ address: CONTRACT_ADDRESS, topic0: PAINTED_TOPIC }],
-          order: "asc",
-        }),
-      }).then(r => r.json())
+      // Use thor.logs.filterRawEventLogs — goes through the ThorClient HTTP client,
+      // not a raw browser fetch, so it bypasses the 403 CORS issue on mainnet.vechain.org
+      const logs = await thor.logs.filterRawEventLogs({
+        range: { unit: "block", from: 0, to: 2 ** 32 - 1 },
+        options: { offset: 0, limit: 100000 },
+        criteriaSet: [{ address: CONTRACT_ADDRESS, topic0: PAINTED_TOPIC }],
+        order: "asc",
+      })
 
       // Build canvas: last event per (x,y) wins
       const pixelMap = new Map<string, Pixel>()
-
-      for (const ev of response ?? []) {
-        // Topics: [topic0, x (indexed uint16), y (indexed uint16)]
-        const x = parseInt(ev.topics[1], 16)
-        const y = parseInt(ev.topics[2], 16)
-        // Data: color (uint24), painter (address), blockNumber (uint32) — ABI-encoded
-        const data: string = ev.data.replace("0x", "")
-        const color = parseInt(data.slice(0, 64), 16)
-        const painter = "0x" + data.slice(64 + 24, 64 + 64) // address is 20 bytes padded in 32
-        const blockNumber = parseInt(data.slice(128, 192), 16)
-
-        pixelMap.set(`${x},${y}`, {
-          x,
-          y,
-          color: uint24ToHex(color),
-          painter: "0x" + data.slice(88, 128), // address padded to 32 bytes
-          blockNumber,
-        })
+      for (const ev of logs ?? []) {
+        const pixel = decodeEvent(ev)
+        pixelMap.set(`${pixel.x},${pixel.y}`, pixel)
       }
 
-      // Build default white canvas, then overlay painted pixels
+      // Full 100x100 grid — unpainted pixels default to white
       const pixels: Pixel[] = []
       for (let x = 0; x < CANVAS_SIZE; x++) {
         for (let y = 0; y < CANVAS_SIZE; y++) {
-          const key = `${x},${y}`
           pixels.push(
-            pixelMap.get(key) ?? {
-              x,
-              y,
+            pixelMap.get(`${x},${y}`) ?? {
+              x, y,
               color: "#FFFFFF",
               painter: "0x0000000000000000000000000000000000000000",
               blockNumber: 0,
@@ -72,52 +75,6 @@ export function useCanvasPixels() {
     staleTime: 10_000,
     refetchInterval: 10_000,
     enabled: !!thor,
-  })
-}
-
-/** Merge new painted events (since lastBlock) into existing pixel array */
-export function useCanvasUpdates(
-  lastBlock: number,
-  onUpdate: (updated: Pixel[]) => void
-) {
-  const thor = useThor()
-
-  return useQuery({
-    queryKey: ["canvas", "updates", CONTRACT_ADDRESS, lastBlock],
-    queryFn: async (): Promise<Pixel[]> => {
-      if (!thor || lastBlock === 0) return []
-
-      const response = await fetch(`${thor.httpClient.baseURL}/logs/event`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify({
-          range: { unit: "block", from: lastBlock + 1, to: 2 ** 32 - 1 },
-          options: { offset: 0, limit: 10000 },
-          criteriaSet: [{ address: CONTRACT_ADDRESS, topic0: PAINTED_TOPIC }],
-          order: "asc",
-        }),
-      }).then(r => r.json())
-
-      const updated: Pixel[] = []
-      for (const ev of response ?? []) {
-        const x = parseInt(ev.topics[1], 16)
-        const y = parseInt(ev.topics[2], 16)
-        const data: string = ev.data.replace("0x", "")
-        const color = parseInt(data.slice(0, 64), 16)
-        const blockNumber = parseInt(data.slice(128, 192), 16)
-        updated.push({
-          x,
-          y,
-          color: uint24ToHex(color),
-          painter: "0x" + data.slice(88, 128),
-          blockNumber,
-        })
-      }
-
-      if (updated.length > 0) onUpdate(updated)
-      return updated
-    },
-    enabled: !!thor && lastBlock > 0,
-    refetchInterval: 10_000,
+    placeholderData: keepPreviousData,
   })
 }
