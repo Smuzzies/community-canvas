@@ -19,7 +19,7 @@ export function VeChainProvider({ children }: Props) {
   // mainnet.vechain.org blocks browser requests with 403 (no CORS headers).
   // vethor-node.vechain.com returns access-control-allow-origin: * and is the
   // official VeChain Foundation public node with CORS support.
-  const nodeUrl = process.env.NEXT_PUBLIC_NODE_URL ?? "https://vethor-node.vechain.com"
+  const nodeUrl = process.env.NEXT_PUBLIC_NODE_URL ?? "https://node-mainnet.vechain.energy"
 
   return (
     <VeChainKitProvider
